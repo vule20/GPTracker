@@ -175,3 +175,42 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Chrome profile (contains your login credentials!)
+chrome-profile/
+
+# Data directories
+data/
+*.csv
+*.json
+!keywords.txt
+!requirements.txt
+
+# Session files
+session_cookies.json
+*cookies.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+*.egg-info/
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDE
+.vscode/
+.idea/
+*.sublime-*
+
+# Logs
+*.log

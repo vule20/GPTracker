@@ -30,6 +30,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
 import re
+import aiofiles
 
 from playwright.async_api import async_playwright, Page, Browser
 
@@ -321,6 +322,9 @@ class GPTrackerDropdown:
         self.gpts = {}
         self.round_date = datetime.now().strftime("%Y-%m-%d")
         self.stats = {"keywords_searched": 0, "gpts_discovered": 0, "gpts_detailed": 0}
+        self.gpt_early_result_file = (
+            self.output_dir / f"all_{self.round_date}-incremental.json"
+        )
 
     async def connect_to_chrome(self, playwright):
         """Connect to existing Chrome browser"""
@@ -783,6 +787,22 @@ class GPTrackerDropdown:
                 for i, keyword in enumerate(keywords, 1):
                     gpts = await self.search_dropdown(page, keyword)
 
+                    if not gpts:
+                        logger.warning(f"⚠️ No GPTs found for keyword: {keyword}")
+                        continue
+
+                    # ✅ Append results immediately to file
+                    logger.info(f"Writing to: {self.gpt_early_result_file.resolve()}")
+                    async with aiofiles.open(
+                        self.gpt_early_result_file, "a", encoding="utf-8"
+                    ) as f:
+                        for gpt in gpts:
+                            # Add context if you want (like which keyword it came from)
+                            gpt["searched_keyword"] = keyword
+                            await f.write(json.dumps(gpt, ensure_ascii=False) + "\n")
+
+                    logger.info(f"💾 Saved {len(gpts)} GPTs for keyword '{keyword}'")
+
                     for gpt in gpts:
                         gizmo_id = gpt["gizmo_id"]
                         if gizmo_id not in self.gpts:
@@ -793,32 +813,35 @@ class GPTrackerDropdown:
                     f"\n✓ Phase 1 complete: {len(self.gpts)} unique GPTs discovered"
                 )
 
-                # Phase 2: Details
-                if fetch_details and len(self.gpts) > 0:
-                    gpt_ids = list(self.gpts.keys())
-                    if detail_limit:
-                        gpt_ids = gpt_ids[:detail_limit]
+                # remove this section to speed up the process, and then use
+                # a seperate file named enhance_gpt_details.py to fetch details later
 
-                    logger.info(
-                        f"\n📍 Phase 2: Fetching details for {len(gpt_ids)} GPTs\n"
-                    )
+                # # Phase 2: Details
+                # if fetch_details and len(self.gpts) > 0:
+                #     gpt_ids = list(self.gpts.keys())
+                #     if detail_limit:
+                #         gpt_ids = gpt_ids[:detail_limit]
 
-                    for i, gizmo_id in enumerate(gpt_ids, 1):
-                        if i % 10 == 0:
-                            logger.info(f"  Progress: {i}/{len(gpt_ids)}")
+                #     logger.info(
+                #         f"\n📍 Phase 2: Fetching details for {len(gpt_ids)} GPTs\n"
+                #     )
 
-                        gpt = self.gpts[gizmo_id]
-                        details = await self.get_gpt_details(page, gizmo_id, gpt["url"])
-                        self.gpts[gizmo_id].update(details)
+                #     for i, gizmo_id in enumerate(gpt_ids, 1):
+                #         if i % 10 == 0:
+                #             logger.info(f"  Progress: {i}/{len(gpt_ids)}")
 
-                    logger.info(
-                        f"✓ Phase 2 complete: {self.stats['gpts_detailed']} detailed"
-                    )
+                #         gpt = self.gpts[gizmo_id]
+                #         details = await self.get_gpt_details(page, gizmo_id, gpt["url"])
+                #         self.gpts[gizmo_id].update(details)
 
-                if len(self.gpts) > 0:
-                    await self.save_results()
-                else:
-                    logger.warning("⚠️  No GPTs found")
+                #     logger.info(
+                #         f"✓ Phase 2 complete: {self.stats['gpts_detailed']} detailed"
+                #     )
+
+                # if len(self.gpts) > 0:
+                #     await self.save_results()
+                # else:
+                #     logger.warning("⚠️  No GPTs found")
 
             except Exception as e:
                 logger.error(f"Error during crawl: {e}")

@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Dict, List
 import re
 import aiofiles
+from datetime import datetime, timezone
 
 from playwright.async_api import async_playwright, Page, Browser
 
@@ -649,6 +650,7 @@ class GPTrackerDropdown:
                                 "num_conversations_str": gpt_data.get("conversations")
                             },
                         },
+                        "scraped_at": datetime.now(timezone.utc).isoformat(),
                     }
                 )
 
@@ -894,6 +896,38 @@ class GPTrackerDropdown:
         logger.info("=" * 60)
 
 
+def unique_searched_keywords(path) -> set:
+    """
+    Read NDJSON or newline JSON records from `path` and return a set of unique
+    `searched_keyword` values. Accepts either a str path or a pathlib.Path.
+    """
+    path = Path(path)  # accept str or Path
+    if not path.exists():
+        # return empty set if file missing (or raise if you prefer)
+        print(f"Warning: file not found: {path}", file=sys.stderr)
+        return set()
+
+    keywords = set()
+    with path.open("r", encoding="utf-8") as f:
+        for lineno, line in enumerate(f, start=1):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                obj = json.loads(line)
+            except json.JSONDecodeError:
+                # skip bad lines but warn
+                print(
+                    f"Warning: skipping invalid JSON on line {lineno} in {path}",
+                    file=sys.stderr,
+                )
+                continue
+            kw = obj.get("searched_keyword")
+            if kw is not None:
+                keywords.add(kw)
+    return keywords
+
+
 async def main():
     parser = argparse.ArgumentParser(
         description="GPTracker - GPT Store Scraper for Misuse Detection Research",
@@ -936,6 +970,10 @@ EXAMPLES:
         "--full",
         action="store_true",
         help="Full replication (10K keywords, 10K GPTs, ~24+ hours)",
+    )
+    parser.add_argument(
+        "--appending-file",
+        help="Saved path. Append scrapping results to an existing file, ignoring existing keywords in the file",
     )
     parser.add_argument(
         "--no-details",
@@ -999,7 +1037,6 @@ SETUP:
     await asyncio.sleep(2)
 
     keywords = generate_keywords(num_keywords)
-    logger.info(f"Generated {len(keywords)} keywords")
 
     crawler = GPTrackerDropdown(
         output_dir=f"data/{mode}",
@@ -1007,6 +1044,16 @@ SETUP:
         max_see_more_clicks=20,
         result_timeout=15.0,
     )
+
+    if args.appending_file:
+        appending_file = Path(args.appending_file)
+        searched_keywords = unique_searched_keywords(appending_file)
+        keywords = [k for k in keywords if k not in searched_keywords]
+        print(f"preparing keywords to scrape data, excluding {searched_keywords}")
+        crawler.gpt_early_result_file = appending_file
+
+    logger.info(f"Generated {len(keywords)} keywords")
+
     await crawler.crawl(
         keywords, fetch_details=fetch_details, detail_limit=detail_limit
     )

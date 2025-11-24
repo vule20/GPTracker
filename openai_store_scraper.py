@@ -312,7 +312,7 @@ class GPTrackerDropdown:
         self,
         output_dir: str = "data",
         delay: float = 2.0,
-        max_see_more_clicks: int = 20,
+        max_see_more_clicks: int = 15,
         result_timeout: float = 15.0,
     ):
         self.output_dir = Path(output_dir)
@@ -815,36 +815,6 @@ class GPTrackerDropdown:
                     f"\n✓ Phase 1 complete: {len(self.gpts)} unique GPTs discovered"
                 )
 
-                # remove this section to speed up the process, and then use
-                # a seperate file named enhance_gpt_details.py to fetch details later
-
-                # # Phase 2: Details
-                # if fetch_details and len(self.gpts) > 0:
-                #     gpt_ids = list(self.gpts.keys())
-                #     if detail_limit:
-                #         gpt_ids = gpt_ids[:detail_limit]
-
-                #     logger.info(
-                #         f"\n📍 Phase 2: Fetching details for {len(gpt_ids)} GPTs\n"
-                #     )
-
-                #     for i, gizmo_id in enumerate(gpt_ids, 1):
-                #         if i % 10 == 0:
-                #             logger.info(f"  Progress: {i}/{len(gpt_ids)}")
-
-                #         gpt = self.gpts[gizmo_id]
-                #         details = await self.get_gpt_details(page, gizmo_id, gpt["url"])
-                #         self.gpts[gizmo_id].update(details)
-
-                #     logger.info(
-                #         f"✓ Phase 2 complete: {self.stats['gpts_detailed']} detailed"
-                #     )
-
-                # if len(self.gpts) > 0:
-                #     await self.save_results()
-                # else:
-                #     logger.warning("⚠️  No GPTs found")
-
             except Exception as e:
                 logger.error(f"Error during crawl: {e}")
                 import traceback
@@ -1041,7 +1011,7 @@ SETUP:
     crawler = GPTrackerDropdown(
         output_dir=f"data/{mode}",
         delay=2.0,
-        max_see_more_clicks=20,
+        max_see_more_clicks=15,
         result_timeout=15.0,
     )
 

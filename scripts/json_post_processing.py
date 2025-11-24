@@ -1,22 +1,22 @@
 # json_post_processing.py
 # Created on: 2025-11-18 16:15:34
 # Author: VuLe@macbook
-# Last updated: 2025-11-18 16:15:34
-# Last modified by: VuLe@macbook
+# Last updated: 2025-11-23 18:18:02
+# Last modified by: VuLe@UMass Amherst
 
-#!/usr/bin/env python3
 """
 Convert newline-separated JSON records (NDJSON) of gizmos into a single JSON array
-with the target schema.
+with the target schema, filtering out duplicate gizmo_id values (keep first occurrence).
 
 Usage:
-    python convert_gizmos.py input.ndjson output.json
+    python json_post_processing.py input.ndjson output.json
 """
 
 import sys
 import json
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
+
 
 def transform_record(rec: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -44,27 +44,26 @@ def transform_record(rec: Dict[str, Any]) -> Dict[str, Any]:
                 "name": display_in.get("name"),
                 "description": None,
                 "prompt_starters": [],
-                "categories": []
+                "categories": [],
             },
-            "author": {
-                "display_name": author_in.get("display_name")
-            },
+            "author": {"display_name": author_in.get("display_name")},
             "vanity_metrics": {
                 "rating": None,
                 # per your example, set these to null even if present in input
                 "num_conversations_str": None,
-                "rank": None
-            }
+                "rank": None,
+            },
         },
         "tools": [],
-        "status": "available"
+        "status": "available",
     }
 
     return out
 
+
 def main(argv):
     if len(argv) != 3:
-        print("Usage: python convert_gizmos.py input.ndjson output.json")
+        print("Usage: python json_post_processing.py input.ndjson output.json")
         return 1
 
     in_path = Path(argv[1])
@@ -75,6 +74,10 @@ def main(argv):
         return 2
 
     out_list = []
+    seen_ids = set()
+    duplicates_skipped = 0
+    missing_id_count = 0
+
     with in_path.open("r", encoding="utf-8") as f:
         for lineno, line in enumerate(f, start=1):
             line = line.strip()
@@ -85,12 +88,34 @@ def main(argv):
             except json.JSONDecodeError as e:
                 print(f"Skipping invalid JSON on line {lineno}: {e}")
                 continue
+
+            gizmo_id = rec.get("gizmo_id")
+            if gizmo_id is None:
+                # Option: treat records without gizmo_id as unique (keep them),
+                # or skip them. Here we keep them but count them.
+                missing_id_count += 1
+                out_list.append(transform_record(rec))
+                continue
+
+            if gizmo_id in seen_ids:
+                duplicates_skipped += 1
+                continue
+
+            seen_ids.add(gizmo_id)
             out_list.append(transform_record(rec))
 
     # Write pretty JSON array
     with out_path.open("w", encoding="utf-8") as f:
         json.dump(out_list, f, indent=2, ensure_ascii=False)
-    print(f"Wrote {len(out_list)} records to {out_path}")
+
+    print(f"Wrote {len(out_list)} unique records to {out_path}")
+    if duplicates_skipped:
+        print(f"Skipped {duplicates_skipped} duplicate records (same gizmo_id).")
+    if missing_id_count:
+        print(f"Kept {missing_id_count} records with missing gizmo_id (no id present).")
+
+    return 0
+
 
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv))
